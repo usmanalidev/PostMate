@@ -1,0 +1,28 @@
+services:
+  - type: web
+    name: postmate-api
+    env: dotnet
+    plan: free
+    buildCommand: dotnet publish -c Release -o ./publish
+    startCommand: dotnet ./publish/PostmateAPI.dll
+    envVars:
+      - key: ASPNETCORE_ENVIRONMENT
+        value: Production
+      - key: ASPNETCORE_URLS
+        value: http://0.0.0.0:$PORT
+      - key: ConnectionStrings__DefaultConnection
+        fromDatabase:
+          name: postmate-db
+          property: connectionString
+      - key: OpenAI__ApiKey
+        sync: false
+      - key: Jwt__Key
+        generateValue: true
+      - key: Jwt__Issuer
+        value: PostmateAPI
+      - key: Jwt__Audience
+        value: PostmateAPI
+
+databases:
+  - name: postmate-db
+    plan: free
