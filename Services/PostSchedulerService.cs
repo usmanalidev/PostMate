@@ -32,15 +32,15 @@ namespace PostmateAPI.Services
                 {
                     try
                     {
-                        //// Simulate posting to LinkedIn
-                        //await PostToLinkedIn(post);
-                        
-                        //// Update post status
-                        //post.Status = "Posted";
-                        //await context.SaveChangesAsync();
+                        // Simulate posting to LinkedIn
+                        await PostToLinkedIn(post);
 
-                        //// Send WhatsApp confirmation (simulated)
-                        //await SendWhatsAppConfirmation(post);
+                        // Update post status
+                        post.Status = "Posted";
+                        await context.SaveChangesAsync();
+
+                        // Send WhatsApp confirmation (simulated)
+                        await SendWhatsAppConfirmation(post);
 
                         _logger.LogInformation("Successfully posted and updated post {PostId}", post.Id);
                     }
