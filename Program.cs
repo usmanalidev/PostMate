@@ -6,7 +6,7 @@ using PostmateAPI.Data;
 using PostmateAPI.Services;
 using System.Text;
 using Hangfire;
-using Hangfire.SqlServer;
+using Hangfire.PostgreSql;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -51,7 +51,7 @@ builder.Services.AddSwaggerGen(c =>
 
 // Database
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
-    options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
+    options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
 
 // JWT Authentication
 var jwtKey = builder.Configuration["Jwt:Key"] ?? "4oHNU2EJAbNnM89bdM3k80QPyDBspmfsDWBdgS3U0fE=";
@@ -80,13 +80,13 @@ builder.Services.AddHangfire(configuration => configuration
     .SetDataCompatibilityLevel(CompatibilityLevel.Version_170)
     .UseSimpleAssemblyNameTypeSerializer()
     .UseRecommendedSerializerSettings()
-    .UseSqlServerStorage(builder.Configuration.GetConnectionString("DefaultConnection"), new SqlServerStorageOptions
+    .UsePostgreSqlStorage(builder.Configuration.GetConnectionString("DefaultConnection"), new PostgreSqlStorageOptions
     {
-        CommandBatchMaxTimeout = TimeSpan.FromMinutes(5),
-        SlidingInvisibilityTimeout = TimeSpan.FromMinutes(5),
-        QueuePollInterval = TimeSpan.Zero,
-        UseRecommendedIsolationLevel = true,
-        DisableGlobalLocks = true
+        QueuePollInterval = TimeSpan.FromSeconds(15),
+        InvisibilityTimeout = TimeSpan.FromMinutes(30),
+        DistributedLockTimeout = TimeSpan.FromMinutes(10),
+        UseNativeDatabaseTransactions = true,
+        PrepareSchemaIfNecessary = true
     }));
 
 builder.Services.AddHangfireServer();

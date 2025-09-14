@@ -26,3 +26,5 @@ services:
 databases:
   - name: postmate-db
     plan: free
+    databaseName: postmatedb
+    user: sa

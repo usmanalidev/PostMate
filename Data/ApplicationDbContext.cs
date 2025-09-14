@@ -17,10 +17,13 @@ namespace PostmateAPI.Data
 
             modelBuilder.Entity<Post>(entity =>
             {
-                entity.HasKey(e => e.Id);
-                entity.Property(e => e.Topic).IsRequired().HasMaxLength(500);
-                entity.Property(e => e.Status).IsRequired().HasMaxLength(50);
-                entity.Property(e => e.CreatedAt).HasDefaultValueSql("GETUTCDATE()");
+                entity.ToTable("posts");
+                entity.Property(e => e.Id).HasColumnName("id");
+                entity.Property(e => e.Topic).HasColumnName("topic");
+                entity.Property(e => e.Draft).HasColumnName("draft");
+                entity.Property(e => e.Status).HasColumnName("status");
+                entity.Property(e => e.ScheduledAt).HasColumnName("scheduled_at");
+                entity.Property(e => e.CreatedAt).HasColumnName("created_at");
             });
         }
     }
