@@ -24,6 +24,9 @@ namespace PostmateAPI.Services
                 var accessToken = _configuration["LinkedIn:AccessToken"];
                 var authorUrn = _configuration["LinkedIn:AuthorUrn"]; // e.g., "urn:li:person:xMR6YUcXmS"
                 
+                _logger.LogInformation("LinkedIn Access Token: {AccessToken}", accessToken);
+                _logger.LogInformation("LinkedIn Author URN: {AuthorUrn}", authorUrn);
+                
                 if (string.IsNullOrEmpty(accessToken) || string.IsNullOrEmpty(authorUrn))
                 {
                     _logger.LogError("LinkedIn access token or author URN not configured");
