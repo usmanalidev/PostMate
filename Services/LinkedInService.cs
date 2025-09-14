@@ -33,24 +33,24 @@ namespace PostmateAPI.Services
                     return false;
                 }
 
-                var requestBody = new
+                var requestBody = new Dictionary<string, object>
                 {
-                    author = authorUrn,
-                    lifecycleState = "PUBLISHED",
-                    specificContent = new
+                    ["author"] = authorUrn,
+                    ["lifecycleState"] = "PUBLISHED",
+                    ["specificContent"] = new Dictionary<string, object>
                     {
-                        shareContent = new
+                        ["com.linkedin.ugc.ShareContent"] = new Dictionary<string, object>
                         {
-                            shareCommentary = new
+                            ["shareCommentary"] = new Dictionary<string, object>
                             {
-                                text = post.Draft
+                                ["text"] = post.Draft
                             },
-                            shareMediaCategory = "NONE"
+                            ["shareMediaCategory"] = "NONE"
                         }
                     },
-                    visibility = new
+                    ["visibility"] = new Dictionary<string, object>
                     {
-                        memberNetworkVisibility = "PUBLIC"
+                        ["com.linkedin.ugc.MemberNetworkVisibility"] = "PUBLIC"
                     }
                 };
 
