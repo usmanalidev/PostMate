@@ -39,7 +39,7 @@ namespace PostmateAPI.Services
                     lifecycleState = "PUBLISHED",
                     specificContent = new
                     {
-                        com_linkedin_ugc_ShareContent = new
+                        shareContent = new
                         {
                             shareCommentary = new
                             {
@@ -50,7 +50,7 @@ namespace PostmateAPI.Services
                     },
                     visibility = new
                     {
-                        com_linkedin_ugc_MemberNetworkVisibility = "PUBLIC"
+                        memberNetworkVisibility = "PUBLIC"
                     }
                 };
 
