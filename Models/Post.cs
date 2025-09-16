@@ -13,7 +13,7 @@ namespace PostmateAPI.Models
         
         [Required]
         [MaxLength(50)]
-        public string PostType { get; set; } = "educational"; // educational, listicle, storytelling, thought-leadership
+        public string PostType { get; set; } = "educational"; // educational, listicle, storytelling, thought-leadership, interview, difference
         
         public string? Draft { get; set; }
         

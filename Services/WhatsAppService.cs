@@ -88,6 +88,23 @@ namespace PostmateAPI.Services
             return await SendMessageAsync(to, message);
         }
 
+        public async Task<bool> SendSchedulingOptionsAsync(string to, string postTopic)
+        {
+            var message = $"⏰ *Schedule Your Post*\n\n" +
+                         $"*Topic:* {postTopic}\n\n" +
+                         $"When would you like to publish this post?\n\n" +
+                         $"• *now* - Publish immediately\n" +
+                         $"• *1h* - After 1 hour\n" +
+                         $"• *4h* - After 4 hours\n" +
+                         $"• *12h* - After 12 hours\n" +
+                         $"• *1d* - After 1 day\n" +
+                         $"• *2d* - After 2 days\n" +
+                         $"• *1w* - After 1 week\n\n" +
+                         $"Just reply with the option (e.g., '1h' or 'now')";
+
+            return await SendMessageAsync(to, message);
+        }
+
         public async Task<bool> SendStatusUpdateAsync(string to, string status, string postTopic)
         {
             string message;
@@ -128,12 +145,16 @@ namespace PostmateAPI.Services
                          $"• *educational:* [your topic] - For teaching and explaining concepts\n" +
                          $"• *listicle:* [your topic] - For numbered lists and tips\n" +
                          $"• *storytelling:* [your topic] - For personal stories and experiences\n" +
-                         $"• *thought-leadership:* [your topic] - For insights and industry perspectives\n\n" +
+                         $"• *thought-leadership:* [your topic] - For insights and industry perspectives\n" +
+                         $"• *interview:* [your topic] - For interview preparation and tips\n" +
+                         $"• *difference:* [your topic] - For comparison tables between concepts\n\n" +
                          $"*Examples:*\n" +
                          $"• educational: How to use AI in marketing\n" +
                          $"• listicle: 5 tips for remote work\n" +
                          $"• storytelling: My journey as an entrepreneur\n" +
-                         $"• thought-leadership: The future of remote work\n\n" +
+                         $"• thought-leadership: The future of remote work\n" +
+                         $"• interview: Data structures and algorithms\n" +
+                         $"• difference: React vs Vue vs Angular\n\n" +
                          $"If you don't specify a type, I'll use 'educational' as default.";
 
             return await SendMessageAsync(to, message);

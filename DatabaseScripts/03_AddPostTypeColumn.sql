@@ -12,7 +12,7 @@ ADD COLUMN post_type VARCHAR(50) NOT NULL DEFAULT 'educational';
 -- Add check constraint for PostType values
 ALTER TABLE posts 
 ADD CONSTRAINT ck_posts_post_type 
-CHECK (post_type IN ('educational', 'listicle', 'storytelling', 'thought-leadership'));
+CHECK (post_type IN ('educational', 'listicle', 'storytelling', 'thought-leadership', 'interview', 'difference'));
 
 -- Create index for better performance
 CREATE INDEX IF NOT EXISTS ix_posts_post_type ON posts (post_type);

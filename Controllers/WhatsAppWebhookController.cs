@@ -83,6 +83,11 @@ namespace PostmateAPI.Controllers
                 {
                     await HandleConfirmationResponse(from, messageText);
                 }
+                // Check if this is a scheduling option
+                else if (IsSchedulingOption(messageText))
+                {
+                    await HandleSchedulingResponse(from, messageText);
+                }
                 else
                 {
                     // Check if this is a modified draft submission (starts with "3 ")
@@ -111,7 +116,7 @@ namespace PostmateAPI.Controllers
         private (string topic, string postType) ParseTopicAndPostType(string messageText)
         {
             // Supported post types
-            var validPostTypes = new[] { "educational", "listicle", "storytelling", "thought-leadership" };
+            var validPostTypes = new[] { "educational", "listicle", "storytelling", "thought-leadership", "interview", "difference" };
             
             // Check if message starts with a post type
             foreach (var postType in validPostTypes)
@@ -128,6 +133,78 @@ namespace PostmateAPI.Controllers
             
             // If no post type specified, return the message as topic with default post type
             return (messageText, "educational");
+        }
+
+        private DateTime? ParseSchedulingTime(string schedulingInput)
+        {
+            var input = schedulingInput.ToLower().Trim();
+            var now = DateTime.UtcNow;
+
+            return input switch
+            {
+                "now" => now.AddMinutes(1), // Schedule for 1 minute from now to ensure it's in the future
+                "1h" => now.AddHours(1),
+                "4h" => now.AddHours(4),
+                "12h" => now.AddHours(12),
+                "1d" => now.AddDays(1),
+                "2d" => now.AddDays(2),
+                "1w" => now.AddDays(7),
+                _ => null // Invalid input
+            };
+        }
+
+        private bool IsSchedulingOption(string messageText)
+        {
+            var validOptions = new[] { "now", "1h", "4h", "12h", "1d", "2d", "1w" };
+            return validOptions.Contains(messageText.ToLower().Trim());
+        }
+
+        private async Task HandleSchedulingResponse(string from, string schedulingOption)
+        {
+            try
+            {
+                _logger.LogInformation("Processing scheduling response from {From}: {Option}", from, schedulingOption);
+
+                // Get the latest pending post that's waiting for scheduling
+                var latestPendingPost = await _context.Posts
+                    .Where(p => p.Status == "Pending" && p.ScheduledAt == null)
+                    .OrderByDescending(p => p.CreatedAt)
+                    .FirstOrDefaultAsync();
+
+                if (latestPendingPost == null)
+                {
+                    _logger.LogWarning("No pending post found for scheduling from {From}", from);
+                    await _whatsAppService.SendMessageAsync(from, 
+                        "❌ No pending posts found. Please create a new post first.");
+                    return;
+                }
+
+                var scheduledTime = ParseSchedulingTime(schedulingOption);
+                if (scheduledTime == null)
+                {
+                    await _whatsAppService.SendMessageAsync(from, 
+                        "❌ Invalid scheduling option. Please use: now, 1h, 4h, 12h, 1d, 2d, or 1w");
+                    return;
+                }
+
+                // Update the post with scheduled time and approve it
+                latestPendingPost.ScheduledAt = scheduledTime.Value;
+                latestPendingPost.Status = "Approved";
+                await _context.SaveChangesAsync();
+
+                // Send confirmation with scheduled time
+                await _whatsAppService.SendScheduledTimeAsync(from, latestPendingPost.Topic, scheduledTime.Value);
+                
+                _logger.LogInformation("Post {PostId} scheduled by {From} for {ScheduledAt}", 
+                    latestPendingPost.Id, from, scheduledTime.Value);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error handling scheduling response from {From}", from);
+                
+                await _whatsAppService.SendMessageAsync(from, 
+                    "❌ Sorry, there was an error processing your scheduling request. Please try again.");
+            }
         }
 
         private async Task HandleNewPostRequest(string from, string topic, string postType = "educational")
@@ -200,16 +277,12 @@ namespace PostmateAPI.Controllers
                     return;
                 }
 
-                if (response == "1") // Approve
+                if (response == "1") // Approve and schedule
                 {
-                    latestPendingPost.Status = "Approved";
-                    latestPendingPost.ScheduledAt = DateTime.UtcNow.AddMinutes(5); // Schedule for 5 minutes from now
-                    await _context.SaveChangesAsync();
-
-                    await _whatsAppService.SendScheduledTimeAsync(from, latestPendingPost.Topic, latestPendingPost.ScheduledAt.Value);
+                    // Send scheduling options instead of immediately scheduling
+                    await _whatsAppService.SendSchedulingOptionsAsync(from, latestPendingPost.Topic);
                     
-                    _logger.LogInformation("Post {PostId} approved by {From} and scheduled for {ScheduledAt}", 
-                        latestPendingPost.Id, from, latestPendingPost.ScheduledAt);
+                    _logger.LogInformation("Scheduling options sent to {From} for post {PostId}", from, latestPendingPost.Id);
                 }
                 else if (response == "0") // Reject
                 {
