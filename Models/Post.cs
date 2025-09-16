@@ -11,6 +11,10 @@ namespace PostmateAPI.Models
         [MaxLength(500)]
         public string Topic { get; set; } = string.Empty;
         
+        [Required]
+        [MaxLength(50)]
+        public string PostType { get; set; } = "educational"; // educational, listicle, storytelling, thought-leadership
+        
         public string? Draft { get; set; }
         
         [Required]

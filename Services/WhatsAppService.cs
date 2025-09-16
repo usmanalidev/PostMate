@@ -73,10 +73,11 @@ namespace PostmateAPI.Services
             }
         }
 
-        public async Task<bool> SendConfirmationMessageAsync(string to, string postTopic, string draft)
+        public async Task<bool> SendConfirmationMessageAsync(string to, string postTopic, string draft, string postType = "educational")
         {
             var message = $"📝 *New Post Created!*\n\n" +
-                         $"*Topic:* {postTopic}\n\n" +
+                         $"*Topic:* {postTopic}\n" +
+                         $"*Post Type:* {postType}\n\n" +
                          $"*Draft:*\n{draft}\n\n" +
                          $"Reply with:\n" +
                          $"• *1* to approve and schedule\n" +
@@ -116,6 +117,24 @@ namespace PostmateAPI.Services
                          $"*Topic:* {postTopic}\n\n" +
                          $"*Scheduled Time:* {scheduledTime}\n\n" +
                          $"Your post will be published automatically at the scheduled time.";
+
+            return await SendMessageAsync(to, message);
+        }
+
+        public async Task<bool> SendPostTypeHelpMessageAsync(string to)
+        {
+            var message = $"📝 *Post Type Selection*\n\n" +
+                         $"You can specify the post type by starting your message with:\n\n" +
+                         $"• *educational:* [your topic] - For teaching and explaining concepts\n" +
+                         $"• *listicle:* [your topic] - For numbered lists and tips\n" +
+                         $"• *storytelling:* [your topic] - For personal stories and experiences\n" +
+                         $"• *thought-leadership:* [your topic] - For insights and industry perspectives\n\n" +
+                         $"*Examples:*\n" +
+                         $"• educational: How to use AI in marketing\n" +
+                         $"• listicle: 5 tips for remote work\n" +
+                         $"• storytelling: My journey as an entrepreneur\n" +
+                         $"• thought-leadership: The future of remote work\n\n" +
+                         $"If you don't specify a type, I'll use 'educational' as default.";
 
             return await SendMessageAsync(to, message);
         }

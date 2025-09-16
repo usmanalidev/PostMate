@@ -73,8 +73,13 @@ namespace PostmateAPI.Controllers
                     return Ok();
                 }
 
+                // Check if this is a help request
+                if (messageText.ToLower() == "help" || messageText.ToLower() == "post types" || messageText.ToLower() == "types")
+                {
+                    await _whatsAppService.SendPostTypeHelpMessageAsync(from);
+                }
                 // Check if this is a confirmation response (1, 0, 2, or 3)
-                if (messageText == "1" || messageText == "0" || messageText == "2" || messageText == "3")
+                else if (messageText == "1" || messageText == "0" || messageText == "2" || messageText == "3")
                 {
                     await HandleConfirmationResponse(from, messageText);
                 }
@@ -88,8 +93,9 @@ namespace PostmateAPI.Controllers
                     }
                     else
                     {
-                        // Treat as new post topic
-                        await HandleNewPostRequest(from, messageText);
+                        // Check if message contains post type specification
+                        var (topic, postType) = ParseTopicAndPostType(messageText);
+                        await HandleNewPostRequest(from, topic, postType);
                     }
                 }
 
@@ -102,16 +108,39 @@ namespace PostmateAPI.Controllers
             }
         }
 
-        private async Task HandleNewPostRequest(string from, string topic)
+        private (string topic, string postType) ParseTopicAndPostType(string messageText)
+        {
+            // Supported post types
+            var validPostTypes = new[] { "educational", "listicle", "storytelling", "thought-leadership" };
+            
+            // Check if message starts with a post type
+            foreach (var postType in validPostTypes)
+            {
+                if (messageText.ToLower().StartsWith($"{postType}:"))
+                {
+                    var topic = messageText.Substring(postType.Length + 1).Trim();
+                    if (!string.IsNullOrEmpty(topic))
+                    {
+                        return (topic, postType);
+                    }
+                }
+            }
+            
+            // If no post type specified, return the message as topic with default post type
+            return (messageText, "educational");
+        }
+
+        private async Task HandleNewPostRequest(string from, string topic, string postType = "educational")
         {
             try
             {
-                _logger.LogInformation("Creating new post for user {From} with topic: {Topic}", from, topic);
+                _logger.LogInformation("Creating new post for user {From} with topic: {Topic} and post type: {PostType}", from, topic, postType);
 
                 // Create new post with draft status
                 var post = new Post
                 {
                     Topic = topic,
+                    PostType = postType,
                     Status = "Draft", // New status for initial creation
                     CreatedAt = DateTime.UtcNow
                 };
@@ -122,13 +151,13 @@ namespace PostmateAPI.Controllers
                 // Generate draft using OpenAI
                 try
                 {
-                    var draft = await _openAIService.GenerateLinkedInPostAsync(topic);
+                    var draft = await _openAIService.GenerateLinkedInPostAsync(topic, post.PostType);
                     post.Draft = draft;
                     post.Status = "Pending"; // Change to pending after draft is generated
                     await _context.SaveChangesAsync();
 
                     // Send confirmation message to user
-                    await _whatsAppService.SendConfirmationMessageAsync(from, topic, draft);
+                    await _whatsAppService.SendConfirmationMessageAsync(from, topic, draft, postType);
 
                     _logger.LogInformation("Post {PostId} created and confirmation sent to {From}", post.Id, from);
                 }
@@ -195,11 +224,11 @@ namespace PostmateAPI.Controllers
                 {
                     try
                     {
-                        var newDraft = await _openAIService.GenerateLinkedInPostAsync(latestPendingPost.Topic);
+                        var newDraft = await _openAIService.GenerateLinkedInPostAsync(latestPendingPost.Topic, latestPendingPost.PostType);
                         latestPendingPost.Draft = newDraft;
                         await _context.SaveChangesAsync();
 
-                        await _whatsAppService.SendConfirmationMessageAsync(from, latestPendingPost.Topic, newDraft);
+                        await _whatsAppService.SendConfirmationMessageAsync(from, latestPendingPost.Topic, newDraft, latestPendingPost.PostType);
                         
                         _logger.LogInformation("Post {PostId} draft regenerated for {From}", latestPendingPost.Id, from);
                     }

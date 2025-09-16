@@ -35,6 +35,7 @@ namespace PostmateAPI.Controllers
                     {
                         Id = p.Id,
                         Topic = p.Topic,
+                        PostType = p.PostType,
                         Draft = p.Draft,
                         Status = p.Status,
                         ScheduledAt = p.ScheduledAt,
@@ -64,6 +65,7 @@ namespace PostmateAPI.Controllers
                 var post = new Post
                 {
                     Topic = request.Topic,
+                    PostType = request.PostType,
                     Status = "Pending",
                     CreatedAt = DateTime.UtcNow
                 };
@@ -74,7 +76,7 @@ namespace PostmateAPI.Controllers
                 // Generate draft using OpenAI
                 try
                 {
-                    var draft = await _openAIService.GenerateLinkedInPostAsync(request.Topic);
+                    var draft = await _openAIService.GenerateLinkedInPostAsync(request.Topic, request.PostType);
                     post.Draft = draft;
                     await _context.SaveChangesAsync();
                 }
@@ -88,6 +90,7 @@ namespace PostmateAPI.Controllers
                 {
                     Id = post.Id,
                     Topic = post.Topic,
+                    PostType = post.PostType,
                     Draft = post.Draft,
                     Status = post.Status,
                     ScheduledAt = post.ScheduledAt,

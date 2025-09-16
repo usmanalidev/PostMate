@@ -20,6 +20,7 @@ namespace PostmateAPI.Data
                 entity.ToTable("posts");
                 entity.Property(e => e.Id).HasColumnName("id");
                 entity.Property(e => e.Topic).HasColumnName("topic");
+                entity.Property(e => e.PostType).HasColumnName("post_type");
                 entity.Property(e => e.Draft).HasColumnName("draft");
                 entity.Property(e => e.Status).HasColumnName("status");
                 entity.Property(e => e.ScheduledAt).HasColumnName("scheduled_at");
