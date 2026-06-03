@@ -14,8 +14,10 @@ services:
         fromDatabase:
           name: postmate-db
           property: connectionString
-      - key: OpenAI__ApiKey
+      - key: Cursor__ApiKey
         sync: false
+      - key: Cursor__Model
+        value: composer-2.5
       - key: Jwt__Key
         generateValue: true
       - key: Jwt__Issuer

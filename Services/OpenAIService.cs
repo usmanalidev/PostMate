@@ -1,9 +1,16 @@
+using System.Net.Http.Headers;
+using System.Text;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace PostmateAPI.Services
 {
     public class OpenAIService : IOpenAIService
     {
+        private const string CursorApiBaseUrl = "https://api.cursor.com/v1";
+        private static readonly TimeSpan PollInterval = TimeSpan.FromSeconds(2);
+        private static readonly TimeSpan MaxWaitTime = TimeSpan.FromMinutes(3);
+
         private readonly ILogger<OpenAIService> _logger;
         private readonly IConfiguration _configuration;
 
@@ -17,33 +24,130 @@ namespace PostmateAPI.Services
         {
             try
             {
-                // Use Google AI Studio (Gemini)
-                return await GenerateWithGoogleAIAsync(topic, postType);
+                return await GenerateWithCursorAsync(topic, postType);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Google AI failed for topic: {Topic} with postType: {PostType}, using template fallback", topic, postType);
+                _logger.LogError(ex, "Cursor API failed for topic: {Topic} with postType: {PostType}, using template fallback", topic, postType);
                 return GenerateFallbackPost(topic);
             }
         }
 
-        private async Task<string> GenerateWithGoogleAIAsync(string topic, string postType)
+        private async Task<string> GenerateWithCursorAsync(string topic, string postType)
         {
-            using var httpClient = new HttpClient();
-            
-            // Get API key from configuration
-            var apiKey = _configuration["GoogleAI:ApiKey"];
-            
+            var apiKey = _configuration["Cursor:ApiKey"];
             if (string.IsNullOrEmpty(apiKey))
             {
-                throw new InvalidOperationException("Google AI API key is not configured. Please set GoogleAI:ApiKey in appsettings.json");
+                throw new InvalidOperationException("Cursor API key is not configured. Please set Cursor:ApiKey in appsettings.json");
             }
 
-            var prompt = 
-$"""
-You are an AI assistant that generates LinkedIn posts. 
+            var modelId = _configuration["Cursor:Model"];
+            if (string.IsNullOrWhiteSpace(modelId))
+            {
+                modelId = "composer-2.5";
+            }
 
-The user will first choose a post type (educational, listicle, storytelling, thought-leadership, interview, difference) 
+            using var httpClient = CreateAuthenticatedClient(apiKey);
+
+            var prompt = BuildPrompt(topic, postType);
+            var createRequest = new
+            {
+                prompt = new { text = prompt },
+                model = new { id = modelId }
+            };
+
+            var jsonOptions = new JsonSerializerOptions
+            {
+                PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+                DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
+            };
+
+            var createContent = new StringContent(
+                JsonSerializer.Serialize(createRequest, jsonOptions),
+                Encoding.UTF8,
+                "application/json");
+
+            var createResponse = await httpClient.PostAsync($"{CursorApiBaseUrl}/agents", createContent);
+            var createResponseBody = await createResponse.Content.ReadAsStringAsync();
+
+            if (!createResponse.IsSuccessStatusCode)
+            {
+                throw new HttpRequestException($"Cursor API create agent failed: {createResponse.StatusCode} - {createResponseBody}");
+            }
+
+            var createResult = JsonSerializer.Deserialize<CursorCreateAgentResponse>(createResponseBody, jsonOptions)
+                ?? throw new InvalidOperationException("Cursor API returned an empty create-agent response");
+
+            var agentId = createResult.Agent?.Id ?? throw new InvalidOperationException("Cursor API did not return an agent id");
+            var runId = createResult.Run?.Id ?? createResult.Agent?.LatestRunId
+                ?? throw new InvalidOperationException("Cursor API did not return a run id");
+
+            _logger.LogInformation("Cursor agent created: AgentId={AgentId}, RunId={RunId}", agentId, runId);
+
+            var result = await PollRunUntilCompleteAsync(httpClient, agentId, runId, jsonOptions);
+            if (string.IsNullOrWhiteSpace(result))
+            {
+                throw new InvalidOperationException("No content generated from Cursor API");
+            }
+
+            return result.Trim();
+        }
+
+        private static async Task<string?> PollRunUntilCompleteAsync(
+            HttpClient httpClient,
+            string agentId,
+            string runId,
+            JsonSerializerOptions jsonOptions)
+        {
+            var deadline = DateTime.UtcNow.Add(MaxWaitTime);
+            var terminalStatuses = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+            {
+                "FINISHED", "ERROR", "CANCELLED", "EXPIRED"
+            };
+
+            while (DateTime.UtcNow < deadline)
+            {
+                var runResponse = await httpClient.GetAsync($"{CursorApiBaseUrl}/agents/{agentId}/runs/{runId}");
+                var runBody = await runResponse.Content.ReadAsStringAsync();
+
+                if (!runResponse.IsSuccessStatusCode)
+                {
+                    throw new HttpRequestException($"Cursor API get run failed: {runResponse.StatusCode} - {runBody}");
+                }
+
+                var run = JsonSerializer.Deserialize<CursorRunResponse>(runBody, jsonOptions)
+                    ?? throw new InvalidOperationException("Cursor API returned an empty run response");
+
+                if (run.Status != null && terminalStatuses.Contains(run.Status))
+                {
+                    if (string.Equals(run.Status, "FINISHED", StringComparison.OrdinalIgnoreCase))
+                    {
+                        return run.Result;
+                    }
+
+                    throw new InvalidOperationException(
+                        $"Cursor API run ended with status {run.Status}: {run.Result ?? "no result text"}");
+                }
+
+                await Task.Delay(PollInterval);
+            }
+
+            throw new TimeoutException($"Cursor API run {runId} did not complete within {MaxWaitTime.TotalMinutes} minutes");
+        }
+
+        private static HttpClient CreateAuthenticatedClient(string apiKey)
+        {
+            var httpClient = new HttpClient();
+            var credentials = Convert.ToBase64String(Encoding.ASCII.GetBytes($"{apiKey}:"));
+            httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Basic", credentials);
+            return httpClient;
+        }
+
+        private static string BuildPrompt(string topic, string postType) =>
+$"""
+You are an AI assistant that generates LinkedIn posts.
+
+The user will first choose a post type (educational, listicle, storytelling, thought-leadership, interview, difference)
 and then provide a topic.
 
 Follow these rules:
@@ -67,84 +171,36 @@ Write in natural, conversational human language.
 Use simple words and clear sentences.
 Avoid technical formatting symbols.
 
-Now, write the LinkedIn post.  
-Topic: {topic}  
+Now, write the LinkedIn post.
+Topic: {topic}
 Post type: {postType}
+
+Return only the final LinkedIn post text. Do not use tools, edit files, or add commentary.
 """;
 
-            var requestBody = new
-            {
-                contents = new[]
-                {
-                    new
-                    {
-                        parts = new[]
-                        {
-                            new { text = prompt }
-                        }
-                    }
-                }
-            };
-
-            var json = JsonSerializer.Serialize(requestBody, new JsonSerializerOptions
-            {
-                PropertyNamingPolicy = JsonNamingPolicy.CamelCase
-            });
-            
-            var content = new StringContent(json, System.Text.Encoding.UTF8, "application/json");
-            
-            // Add the API key as header (not query parameter)
-            httpClient.DefaultRequestHeaders.Add("X-goog-api-key", apiKey);
-            
-            var response = await httpClient.PostAsync("https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent", content);
-            
-            if (!response.IsSuccessStatusCode)
-            {
-                var errorContent = await response.Content.ReadAsStringAsync();
-                throw new HttpRequestException($"Google AI API request failed: {response.StatusCode} - {errorContent}");
-            }
-            
-            var responseContent = await response.Content.ReadAsStringAsync();
-            // Gemini's response uses lowercase property names, so we need to use PropertyNameCaseInsensitive = true
-            var result = JsonSerializer.Deserialize<GoogleAIResponse>(responseContent, new JsonSerializerOptions
-            {
-                PropertyNameCaseInsensitive = true
-            });
-            
-            if (result?.Candidates?.FirstOrDefault()?.Content?.Parts?.FirstOrDefault()?.Text != null)
-            {
-                return result.Candidates!.First().Content!.Parts!.First().Text!.Trim();
-            }
-            
-            throw new InvalidOperationException("No content generated from Google AI API");
-        }
-
-
-        private string GenerateFallbackPost(string topic)
+        private static string GenerateFallbackPost(string topic)
         {
             return "Currently server is busy please try again later, sorry for inconvenience!";
         }
     }
 
-    // Response models for Google AI API
-    public class GoogleAIResponse
+    public class CursorCreateAgentResponse
     {
-        public Candidate[]? Candidates { get; set; }
+        public CursorAgentInfo? Agent { get; set; }
+        public CursorRunResponse? Run { get; set; }
     }
 
-    public class Candidate
+    public class CursorAgentInfo
     {
-        public Content? Content { get; set; }
+        public string? Id { get; set; }
+        public string? LatestRunId { get; set; }
     }
 
-    public class Content
+    public class CursorRunResponse
     {
-        public Part[]? Parts { get; set; }
+        public string? Id { get; set; }
+        public string? AgentId { get; set; }
+        public string? Status { get; set; }
+        public string? Result { get; set; }
     }
-
-    public class Part
-    {
-        public string? Text { get; set; }
-    }
-
 }
